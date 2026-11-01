@@ -20,7 +20,7 @@ jobs:
 
       - name: Normalise the kernel patches
         run: |
-          ./compile.sh BOARD=armsom-cm5-io BRANCH=edge rewrite-kernel-patches \
+          ./compile.sh BOARD=armsom-cm5-io BRANCH=edge rewrite-kernel-patches KERNEL_GIT=shallow \
             PREFER_DOCKER=no EXPERT=yes
           git status --porcelain patch/kernel/archive/rockchip64-7.3/
           git diff --stat
