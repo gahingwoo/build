@@ -1,18 +1,15 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Jiaxing Hu <gahing@gahingwoo.com>
-Date: Sun, 1 Nov 2026 16:18:05 +1300
+Date: Sun, 1 Nov 2026 18:00:00 +1300
 Subject: DEBUG: print QoS after restore (not for upstream)
 
 ---
- drivers/pmdomain/rockchip/pm-domains.c | 15 +++++++++++++++
- 1 file changed, 15 insertions(+)
-
 diff --git a/drivers/pmdomain/rockchip/pm-domains.c b/drivers/pmdomain/rockchip/pm-domains.c
 index 111111111111..222222222222 100644
 --- a/drivers/pmdomain/rockchip/pm-domains.c
 +++ b/drivers/pmdomain/rockchip/pm-domains.c
-@@ -720,6 +720,21 @@ static int rockchip_pd_power(struct rockchip_pm_domain *pd, bool power_on)
- 			udelay(pd->info->delay_us);
+@@ -682,6 +682,20 @@ static int rockchip_pd_power(struct rockchip_pm_domain *pd, bool power_on)
+ 			goto out;
  
  		rockchip_pmu_restore_qos(pd);
 +		{
@@ -26,13 +23,9 @@ index 111111111111..222222222222 100644
 +				regmap_read(pd->qos_regmap[qi], QOS_SATURATION, &v[3]);
 +				regmap_read(pd->qos_regmap[qi], QOS_EXTCONTROL, &v[4]);
 +				dev_info(pmu->dev, "QOSDBG %s qos%d now %08x %08x %08x %08x %08x\n",
-+					 pd->genpd.name, qi,
-+					 v[0], v[1], v[2], v[3], v[4]);
++					 pd->genpd.name, qi, v[0], v[1], v[2], v[3], v[4]);
 +			}
 +		}
  	}
  
  out:
--- 
-2.43.0
-
