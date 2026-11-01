@@ -1,0 +1,49 @@
+name: Build CM5-IO NPU images
+
+on:
+  push:
+    branches: [armsom-cm5-io-npu-ci]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 360
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache /usr/local/share/boost /usr/share/swift
+          df -h /
+
+      - uses: actions/checkout@v4
+
+      - name: Normalise the kernel patches
+        run: |
+          ./compile.sh BOARD=armsom-cm5-io BRANCH=edge rewrite-kernel-patches \
+            PREFER_DOCKER=no EXPERT=yes
+          git status --porcelain patch/kernel/archive/rockchip64-7.3/
+          git diff --stat
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rewritten-patches
+          path: patch/kernel/archive/rockchip64-7.3/
+
+      - name: Build
+        run: |
+          ./compile.sh build BOARD=armsom-cm5-io BRANCH=edge RELEASE=trixie \
+            BUILD_MINIMAL=yes BUILD_DESKTOP=no KERNEL_CONFIGURE=no \
+            COMPRESS_OUTPUTIMAGE=sha,img,xz PREFER_DOCKER=no EXPERT=yes
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: armsom-cm5-io-edge-trixie-minimal
+          path: output/images/
+          compression-level: 0
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-logs-edge
+          path: output/logs/
