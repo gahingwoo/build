@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jiaxing Hu <gahing@gahingwoo.com>
+Date: Sun, 8 Nov 2026 16:31:13 +1300
+Subject: [PATCH] rocket: four IOMMU clocks, and a single power domain allowed
+ (TEST ONLY)
+
+The NPU IOMMUs drop the npu clock, as in v16. rocket_core_init() skips
+the multi-domain attach when the node lists only one power domain, so
+that one domain per core can be tried from an overlay. Fork CI only.
+
+Signed-off-by: Jiaxing Hu <gahing@gahingwoo.com>
+---
+ arch/arm64/boot/dts/rockchip/rk3576.dtsi | 12 ++++--------
+ drivers/accel/rocket/rocket_core.c       |  4 +++-
+ 2 files changed, 7 insertions(+), 9 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/rockchip/rk3576.dtsi b/arch/arm64/boot/dts/rockchip/rk3576.dtsi
+index ce96e639a0be..eeee6f886a01 100644
+--- a/arch/arm64/boot/dts/rockchip/rk3576.dtsi
++++ b/arch/arm64/boot/dts/rockchip/rk3576.dtsi
+@@ -1296,10 +1296,8 @@ rknn_mmu_0: iommu@27702000 {
+ 			      <0x0 0x27702100 0x0 0x100>;
+ 			interrupts = <GIC_SPI 247 IRQ_TYPE_LEVEL_HIGH>;
+ 			clocks = <&cru ACLK_RKNN0>, <&cru HCLK_RKNN_ROOT>,
+-				 <&cru CLK_RKNN_DSU0>, <&cru ACLK_RKNN_CBUF>,
+-				 <&cru HCLK_RKNN_CBUF>;
+-			clock-names = "aclk", "iface", "npu",
+-				      "aclk_cbuf", "hclk_cbuf";
++				 <&cru ACLK_RKNN_CBUF>, <&cru HCLK_RKNN_CBUF>;
++			clock-names = "aclk", "iface", "aclk_cbuf", "hclk_cbuf";
+ 			#iommu-cells = <0>;
+ 			power-domains = <&power RK3576_PD_NPU0>;
+ 			status = "disabled";
+@@ -1332,10 +1330,8 @@ rknn_mmu_1: iommu@2770a000 {
+ 			      <0x0 0x2770a100 0x0 0x100>;
+ 			interrupts = <GIC_SPI 248 IRQ_TYPE_LEVEL_HIGH>;
+ 			clocks = <&cru ACLK_RKNN1>, <&cru HCLK_RKNN_ROOT>,
+-				 <&cru CLK_RKNN_DSU0>, <&cru ACLK_RKNN_CBUF>,
+-				 <&cru HCLK_RKNN_CBUF>;
+-			clock-names = "aclk", "iface", "npu",
+-				      "aclk_cbuf", "hclk_cbuf";
++				 <&cru ACLK_RKNN_CBUF>, <&cru HCLK_RKNN_CBUF>;
++			clock-names = "aclk", "iface", "aclk_cbuf", "hclk_cbuf";
+ 			#iommu-cells = <0>;
+ 			power-domains = <&power RK3576_PD_NPU1>;
+ 			status = "disabled";
+diff --git a/drivers/accel/rocket/rocket_core.c b/drivers/accel/rocket/rocket_core.c
+index 9d6d2bc54d80..d356b34f42e5 100644
+--- a/drivers/accel/rocket/rocket_core.c
++++ b/drivers/accel/rocket/rocket_core.c
+@@ -63,7 +63,9 @@ int rocket_core_init(struct rocket_core *core)
+ 	if (err)
+ 		return err;
+ 
+-	if (core->soc->multi_power_domain) {
++	if (core->soc->multi_power_domain &&
++	    of_count_phandle_with_args(dev->of_node, "power-domains",
++				       "#power-domain-cells") > 1) {
+ 		struct dev_pm_domain_list *pd_list;
+ 
+ 		err = devm_pm_domain_attach_list(dev, NULL, &pd_list);
+-- 
+2.43.0
+
