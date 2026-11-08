@@ -1,4 +1,4 @@
-name: Build the edge kernel with the RK3576 NPU v16 test delta
+name: Build a ROCK 4D edge image with the RK3576 NPU v16 test delta
 
 on:
   push:
@@ -18,15 +18,16 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: Build the kernel packages
+      - name: Build
         run: |
-          ./compile.sh kernel BOARD=armsom-cm5-io BRANCH=edge \
-            PREFER_DOCKER=no EXPERT=yes KERNEL_CONFIGURE=no
+          ./compile.sh build BOARD=radxa-rock-4d BRANCH=edge RELEASE=trixie \
+            BUILD_MINIMAL=yes BUILD_DESKTOP=no KERNEL_CONFIGURE=no \
+            COMPRESS_OUTPUTIMAGE=sha,img,xz PREFER_DOCKER=no EXPERT=yes
 
       - uses: actions/upload-artifact@v4
         with:
-          name: kernel-debs
-          path: output/debs/
+          name: radxa-rock-4d-edge-trixie-minimal
+          path: output/images/
           compression-level: 0
 
       - uses: actions/upload-artifact@v4
