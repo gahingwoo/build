@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jiaxing Hu <gahing@gahingwoo.com>
+Date: Sun, 8 Nov 2026 15:03:12 +1300
+Subject: [PATCH] accel/rocket: 2 ms job timeout to force resets (TEST ONLY)
+
+Igor Paunovic's induced-reset protocol: with a 2 ms timeout ordinary jobs
+time out and every one goes through rocket_reset(). Fork CI testing only.
+
+Signed-off-by: Jiaxing Hu <gahing@gahingwoo.com>
+---
+ drivers/accel/rocket/rocket_job.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/accel/rocket/rocket_job.c b/drivers/accel/rocket/rocket_job.c
+index 2c700aaea43d..5fbb94875658 100644
+--- a/drivers/accel/rocket/rocket_job.c
++++ b/drivers/accel/rocket/rocket_job.c
+@@ -19,7 +19,7 @@
+ #include "rocket_job.h"
+ #include "rocket_registers.h"
+ 
+-#define JOB_TIMEOUT_MS 500
++#define JOB_TIMEOUT_MS 2
+ 
+ #define RK3576_PC_TASK_CON_TASK_NUMBER(n)	((n) & 0xffff)
+ #define RK3576_PC_TASK_CON_PP_EN		BIT(16)
+-- 
+2.43.0
+
