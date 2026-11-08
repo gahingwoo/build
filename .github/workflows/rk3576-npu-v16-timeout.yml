@@ -1,0 +1,36 @@
+name: Build the edge kernel with a 2 ms rocket job timeout (test only)
+
+on:
+  push:
+    branches: [rk3576-npu-v16-timeout]
+  workflow_dispatch:
+
+jobs:
+  kernel:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 240
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache /usr/local/share/boost /usr/share/swift
+          df -h /
+
+      - uses: actions/checkout@v4
+
+      - name: Build the kernel packages
+        run: |
+          ./compile.sh kernel BOARD=radxa-rock-4d BRANCH=edge \
+            PREFER_DOCKER=no EXPERT=yes KERNEL_CONFIGURE=no
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kernel-debs
+          path: output/debs/
+          compression-level: 0
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-logs
+          path: output/logs/
