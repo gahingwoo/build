@@ -1,0 +1,54 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jiaxing Hu <gahing@gahingwoo.com>
+Date: Sun, 8 Nov 2026 17:08:18 +1300
+Subject: [PATCH] rocket: v15 order of the reset put, for an A/B against v16
+ (TEST ONLY)
+
+Drop the job's runtime PM reference inside job_lock before the IOMMU
+detach and the core reset, as v15's 4/15 did. Fork CI only.
+
+Signed-off-by: Jiaxing Hu <gahing@gahingwoo.com>
+---
+ drivers/accel/rocket/rocket_job.c | 10 +++-------
+ 1 file changed, 3 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/accel/rocket/rocket_job.c b/drivers/accel/rocket/rocket_job.c
+index 5fbb94875658..7ee13be5cb19 100644
+--- a/drivers/accel/rocket/rocket_job.c
++++ b/drivers/accel/rocket/rocket_job.c
+@@ -391,8 +391,6 @@ static void rocket_job_handle_irq(struct rocket_core *core)
+ static void
+ rocket_reset(struct rocket_core *core, struct drm_sched_job *bad)
+ {
+-	bool put_job_ref;
+-
+ 	if (!atomic_read(&core->reset.pending))
+ 		return;
+ 
+@@ -411,10 +409,11 @@ rocket_reset(struct rocket_core *core, struct drm_sched_job *bad)
+ 	/*
+ 	 * Remaining interrupts have been handled, but we might still have
+ 	 * stuck jobs. Let's make sure the PM counters stay balanced by
+-	 * dropping the job's reference once the core has been reset.
++	 * dropping the job's reference.
+ 	 */
+ 	scoped_guard(mutex, &core->job_lock) {
+-		put_job_ref = core->in_flight_job;
++		if (core->in_flight_job)
++			pm_runtime_put_autosuspend(core->dev);
+ 
+ 		iommu_detach_group(NULL, core->iommu_group);
+ 
+@@ -424,9 +423,6 @@ rocket_reset(struct rocket_core *core, struct drm_sched_job *bad)
+ 	/* Proceed with reset now. */
+ 	rocket_core_reset(core);
+ 
+-	if (put_job_ref)
+-		pm_runtime_put_autosuspend(core->dev);
+-
+ 	/* NPU has been reset, we can clear the reset pending bit. */
+ 	atomic_set(&core->reset.pending, 0);
+ 
+-- 
+2.43.0
+
