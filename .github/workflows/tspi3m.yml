@@ -17,8 +17,8 @@ jobs:
             flavour: gnome
             args: BUILD_MINIMAL=no BUILD_DESKTOP=yes DESKTOP_ENVIRONMENT=gnome DESKTOP_TIER=mid
           - branch: edge
-            flavour: minimal
-            args: BUILD_MINIMAL=yes BUILD_DESKTOP=no
+            flavour: gnome
+            args: BUILD_MINIMAL=no BUILD_DESKTOP=yes DESKTOP_ENVIRONMENT=gnome DESKTOP_TIER=mid
     steps:
       - name: Free disk space
         run: |
