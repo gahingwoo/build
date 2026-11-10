@@ -12,7 +12,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        branch: [vendor, edge]
+        include:
+          - branch: vendor
+            flavour: gnome
+            args: BUILD_MINIMAL=no BUILD_DESKTOP=yes DESKTOP_ENVIRONMENT=gnome DESKTOP_TIER=mid
+          - branch: edge
+            flavour: minimal
+            args: BUILD_MINIMAL=yes BUILD_DESKTOP=no
     steps:
       - name: Free disk space
         run: |
@@ -25,12 +31,12 @@ jobs:
       - name: Build
         run: |
           ./compile.sh build BOARD=lckfb-taishanpi-3m BRANCH=${{ matrix.branch }} RELEASE=trixie \
-            BUILD_MINIMAL=yes BUILD_DESKTOP=no KERNEL_CONFIGURE=no \
+            ${{ matrix.args }} KERNEL_CONFIGURE=no \
             COMPRESS_OUTPUTIMAGE=sha,img,xz PREFER_DOCKER=no EXPERT=yes
 
       - uses: actions/upload-artifact@v4
         with:
-          name: lckfb-taishanpi-3m-${{ matrix.branch }}-trixie-minimal
+          name: lckfb-taishanpi-3m-${{ matrix.branch }}-trixie-${{ matrix.flavour }}
           path: output/images/
           compression-level: 0
 
