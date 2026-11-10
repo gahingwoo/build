@@ -136,3 +136,11 @@ function post_customize_image__lckfb_taishanpi_3m_phosh_landscape() {
 		scale = 1
 	EOF_PHOC
 }
+
+# CI ONLY: build the vendor kernel from the fork branch that carries the
+# TaishanPi 3M device tree until it is merged in armbian/linux-rockchip
+function post_family_config__zz_ci_vendor_kernel_fork() {
+	[[ "${BRANCH}" == vendor* ]] || return 0
+	declare -g KERNELSOURCE="https://github.com/gahingwoo/linux-rockchip.git"
+	declare -g KERNELBRANCH="branch:lckfb-tspi-3m"
+}
