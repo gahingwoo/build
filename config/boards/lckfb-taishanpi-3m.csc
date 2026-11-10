@@ -144,3 +144,18 @@ function post_family_config__zz_ci_vendor_kernel_fork() {
 	declare -g KERNELSOURCE="https://github.com/gahingwoo/linux-rockchip.git"
 	declare -g KERNELBRANCH="branch:lckfb-tspi-3m"
 }
+
+# CI ONLY: the camera packages are not in the Armbian repository yet.
+# Install them directly so the camera hook above finds them installed.
+function post_customize_image__aa_ci_camera_debs() {
+	[[ "${BRANCH}" == vendor* ]] || return 0
+	local d="${SDCARD}/root/ci-debs"
+	mkdir -p "${d}"
+	curl -fsSL --retry 3 -o "${d}/camera-engine-rkaiq-rk3576.deb" \
+		"https://seeed-studio.github.io/seeed_armbian_extension/pool/main/c/camera-engine-rkaiq-rk3576/camera-engine-rkaiq-rk3576_6.0x32.0-1_arm64.deb"
+	[[ "${BUILD_DESKTOP}" == "yes" ]] && cp "${SRC}/ci-debs/"rk-pw-camera_*.deb "${d}/"
+	local f debs=()
+	for f in "${d}"/*.deb; do debs+=("/root/ci-debs/${f##*/}"); done
+	chroot_sdcard_apt_get_install "${debs[@]}"
+	rm -rf "${d}"
+}
