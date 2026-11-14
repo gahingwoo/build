@@ -21,20 +21,9 @@ Reported-by: Vladimir Bely <vlwwwwww@gmail.com>
 Closes: https://github.com/gahingwoo/linux-rk3576-npu/issues/4
 Signed-off-by: Jiaxing Hu <gahing@gahingwoo.com>
 ---
- arch/arm64/boot/dts/rockchip/Makefile  |  2 +
  drivers/pmdomain/rockchip/pm-domains.c | 60 +++++++++++++++++++++++---
- 2 files changed, 56 insertions(+), 6 deletions(-)
+ 1 file changed, 54 insertions(+), 6 deletions(-)
 
-diff --git a/arch/arm64/boot/dts/rockchip/Makefile b/arch/arm64/boot/dts/rockchip/Makefile
-index e7936a21c118..648d96af8590 100644
---- a/arch/arm64/boot/dts/rockchip/Makefile
-+++ b/arch/arm64/boot/dts/rockchip/Makefile
-@@ -343,3 +343,5 @@ rk3588-rock-5b-plus-radxa-4k-cam-dtbs := rk3588-rock-5b-plus.dtb \
- dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3588-tiger-haikou-haikou-video-demo.dtb
- rk3588-tiger-haikou-haikou-video-demo-dtbs := rk3588-tiger-haikou.dtb \
- 	rk3588-tiger-haikou-video-demo.dtbo
-+dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3576-nanopi-r76s-pr.dtb
-+dtb-$(CONFIG_ARCH_ROCKCHIP) += rk3576-nanopi-r76s-main.dtb
 diff --git a/drivers/pmdomain/rockchip/pm-domains.c b/drivers/pmdomain/rockchip/pm-domains.c
 index d45821459e91..8ffc9f42a8c0 100644
 --- a/drivers/pmdomain/rockchip/pm-domains.c
