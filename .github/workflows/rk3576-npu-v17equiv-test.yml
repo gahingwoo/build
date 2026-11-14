@@ -1,8 +1,8 @@
-name: RK3576 NPU probe-off test (test only)
+name: RK3576 NPU v17 equivalent test (test only)
 
 on:
   push:
-    branches: [rk3576-npu-probeoff-test]
+    branches: [rk3576-npu-v17equiv-test]
   workflow_dispatch:
 
 jobs:

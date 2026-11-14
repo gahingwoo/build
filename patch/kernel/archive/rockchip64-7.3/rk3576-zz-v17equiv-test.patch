@@ -1,0 +1,140 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jiaxing Hu <gahing@gahingwoo.com>
+Date: Sat, 14 Nov 2026 13:26:24 +1300
+Subject: [PATCH 1/2] Revert "pmdomain: rockchip: cycle an optional
+ power-domain reset on power-on"
+
+This reverts commit e40ca1530b205983979810aae907d6c15723dc63.
+---
+ drivers/pmdomain/rockchip/pm-domains.c | 33 +-------------------------
+ 1 file changed, 1 insertion(+), 32 deletions(-)
+
+diff --git a/drivers/pmdomain/rockchip/pm-domains.c b/drivers/pmdomain/rockchip/pm-domains.c
+index 8ffc9f42a8c0..0a33860baf2e 100644
+--- a/drivers/pmdomain/rockchip/pm-domains.c
++++ b/drivers/pmdomain/rockchip/pm-domains.c
+@@ -19,7 +19,6 @@
+ #include <linux/of_clk.h>
+ #include <linux/clk.h>
+ #include <linux/delay.h>
+-#include <linux/reset.h>
+ #include <linux/regmap.h>
+ #include <linux/regulator/consumer.h>
+ #include <linux/mfd/syscon.h>
+@@ -104,7 +103,6 @@ struct rockchip_pm_domain {
+ 	struct clk_bulk_data *clks;
+ 	struct device_node *node;
+ 	struct regulator *supply;
+-	struct reset_control *reset;
+ 	bool off_at_probe;
+ };
+ 
+@@ -696,21 +694,6 @@ static int rockchip_pd_power(struct rockchip_pm_domain *pd, bool power_on)
+ 		if (ret < 0)
+ 			goto out;
+ 
+-		/*
+-		 * Optional: some domains need their reset cycled once power
+-		 * is on. This goes BEFORE the settle delay, not after: a
+-		 * domain that asks for both is asking to settle before the
+-		 * QoS registers answer, and a reset deasserted after the
+-		 * delay would leave nothing between it and the QoS writes.
+-		 * On RK3576 the reset being cycled is the NPU core's bus
+-		 * interface, which is what those writes go through.
+-		 */
+-		if (pd->reset) {
+-			reset_control_assert(pd->reset);
+-			usleep_range(10, 20);
+-			reset_control_deassert(pd->reset);
+-		}
+-
+ 		/* Some domains need to settle before the QoS registers answer. */
+ 		if (pd->info->delay_us)
+ 			udelay(pd->info->delay_us);
+@@ -917,14 +900,6 @@ static int rockchip_pm_add_one_domain(struct rockchip_pmu *pmu,
+ 	if (error)
+ 		goto err_put_clocks;
+ 
+-	pd->reset = of_reset_control_get_optional_exclusive(node, NULL);
+-	if (IS_ERR(pd->reset)) {
+-		error = dev_err_probe(pmu->dev, PTR_ERR(pd->reset),
+-				      "%pOFn: failed to get reset\n", node);
+-		pd->reset = NULL;
+-		goto err_unprepare_clocks;
+-	}
+-
+ 	pd->num_qos = of_count_phandle_with_args(node, "pm_qos",
+ 						 NULL);
+ 
+@@ -1007,13 +982,11 @@ static int rockchip_pm_add_one_domain(struct rockchip_pmu *pmu,
+ 	clk_bulk_unprepare(pd->num_clks, pd->clks);
+ err_put_clocks:
+ 	clk_bulk_put(pd->num_clks, pd->clks);
+-	reset_control_put(pd->reset);
+ 	return error;
+ }
+ 
+ static void rockchip_pm_remove_one_domain(struct rockchip_pm_domain *pd)
+ {
+-	struct reset_control *reset;
+ 	int ret;
+ 
+ 	/*
+@@ -1028,15 +1001,11 @@ static void rockchip_pm_remove_one_domain(struct rockchip_pm_domain *pd)
+ 	clk_bulk_unprepare(pd->num_clks, pd->clks);
+ 	clk_bulk_put(pd->num_clks, pd->clks);
+ 
+-	/* protect the zeroing of pd->num_clks and pd->reset */
++	/* protect the zeroing of pm->num_clks */
+ 	mutex_lock(&pd->pmu->mutex);
+ 	pd->num_clks = 0;
+-	reset = pd->reset;
+-	pd->reset = NULL;
+ 	mutex_unlock(&pd->pmu->mutex);
+ 
+-	reset_control_put(reset);
+-
+ 	/* devm will free our memory */
+ }
+ 
+-- 
+2.43.0
+
+
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jiaxing Hu <gahing@gahingwoo.com>
+Date: Sat, 14 Nov 2026 13:26:35 +1300
+Subject: [PATCH 2/2] pmdomain: rockchip: RK3576 delay on NPUTOP and VOP only
+ (v17 equivalent, test only)
+
+---
+ drivers/pmdomain/rockchip/pm-domains.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/pmdomain/rockchip/pm-domains.c b/drivers/pmdomain/rockchip/pm-domains.c
+index 0a33860baf2e..3add2be2af39 100644
+--- a/drivers/pmdomain/rockchip/pm-domains.c
++++ b/drivers/pmdomain/rockchip/pm-domains.c
+@@ -1410,7 +1410,7 @@ static const struct rockchip_domain_info rk3576_pm_domains[] = {
+ 	[RK3576_PD_AUDIO]	= DOMAIN_RK3576("audio",  0x0, BIT(8),  0,      BIT(8),  0x4, BIT(0),  BIT(16), BIT(0),  0,    false),
+ 	[RK3576_PD_PHP]		= DOMAIN_RK3576("php",    0x0, BIT(9),  0,      BIT(9),  0x0, BIT(15), BIT(15), BIT(15), 0,    false),
+ 	[RK3576_PD_SUBPHP]	= DOMAIN_RK3576("subphp", 0x0, BIT(10), 0,      BIT(10), 0x0, 0,       0,       0,       0,    false),
+-	[RK3576_PD_VOP]		= DOMAIN_RK3576("vop",    0x0, BIT(11), 0,      BIT(11), 0x0, 0x6000,  0x6000,  0x6000,  0,    false),
++	[RK3576_PD_VOP]		= DOMAIN_RK3576("vop",    0x0, BIT(11), 0,      BIT(11), 0x0, 0x6000,  0x6000,  0x6000,  15,   false),
+ 	[RK3576_PD_VO1]		= DOMAIN_RK3576("vo1",    0x0, BIT(14), 0,      BIT(14), 0x0, BIT(12), BIT(12), 0x7000,  0,    false),
+ 	[RK3576_PD_VO0]		= DOMAIN_RK3576("vo0",    0x0, BIT(15), 0,      BIT(15), 0x0, BIT(11), BIT(11), 0x6800,  0,    false),
+ 	[RK3576_PD_USB]		= DOMAIN_RK3576("usb",    0x4, BIT(0),  0,      BIT(16), 0x0, BIT(10), BIT(10), 0x6400,  0,    true),
+@@ -1420,8 +1420,8 @@ static const struct rockchip_domain_info rk3576_pm_domains[] = {
+ 	[RK3576_PD_VDEC]	= DOMAIN_RK3576("vdec",   0x4, BIT(4),  0,      BIT(20), 0x0, BIT(6),  BIT(6),  BIT(6),  0,    false),
+ 	[RK3576_PD_VPU]		= DOMAIN_RK3576("vpu",    0x4, BIT(5),  0,      BIT(21), 0x0, BIT(5),  BIT(5),  BIT(5),  0,    false),
+ 	[RK3576_PD_NPUTOP]	= DOMAIN_RK3576("nputop", 0x4, BIT(6),  0,      BIT(22), 0x0, 0x18,    0x18,    0x18,    15,   false),
+-	[RK3576_PD_NPU0]	= DOMAIN_RK3576("npu0",   0x4, BIT(7),  0,      BIT(23), 0x0, BIT(1),  BIT(1),  0x1a,    15,   false),
+-	[RK3576_PD_NPU1]	= DOMAIN_RK3576("npu1",   0x4, BIT(8),  0,      BIT(24), 0x0, BIT(2),  BIT(2),  0x1c,    15,   false),
++	[RK3576_PD_NPU0]	= DOMAIN_RK3576("npu0",   0x4, BIT(7),  0,      BIT(23), 0x0, BIT(1),  BIT(1),  0x1a,    0,    false),
++	[RK3576_PD_NPU1]	= DOMAIN_RK3576("npu1",   0x4, BIT(8),  0,      BIT(24), 0x0, BIT(2),  BIT(2),  0x1c,    0,    false),
+ 	[RK3576_PD_GPU]		= DOMAIN_RK3576("gpu",    0x4, BIT(9),  0,      BIT(25), 0x0, BIT(0),  BIT(0),  BIT(0),  0,    false),
+ };
+ 
+-- 
+2.43.0
+
