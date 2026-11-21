@@ -1,0 +1,132 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * LCKFB TaishanPi 3M: Sony IMX415 camera module (CMK-OT2022-PX1) on the
+ * MIPI-CSI-1 connector.
+ *
+ * NOT run on hardware with any kernel: the camera has only been used on
+ * the MIPI-CSI-3 connector. Wiring is from LCKFB's vendor kernel device
+ * tree (rk3576-lckfb-tspi-3m-csi1.dtsi).
+ *
+ * Data path (mainline, v7.4-rc1 or later):
+ *   imx415 (4 lanes) -> csi_dphy0 (Innosilicon D-PHY 0, full mode)
+ *   -> csi1 (Synopsys CSI-2 receiver MIPI1) -> vicap port@2 (MIPI1)
+ * This is the same SoC path as the Radxa Camera 4K on the ROCK 4D
+ * (rk3576-rock-4d-radxa-cam4k.dtso), which upstream tested.
+ *
+ * - I2C5 on i2c5m3, sensor at 0x37 (vendor DT also lists 0x1a)
+ * - MCLK from CLK_MIPI_CAMERAOUT_M1 on cam_clk1m0 (GPIO4_A0), 37.125 MHz
+ * - XCLR (reset) on GPIO1_C4, active low
+ * - vendor "pwdn-gpios" on GPIO1_C5 is not driven (see the CSI-3 overlay)
+ * - the camera rails are shared with the other connectors (GPIO0_C4)
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/clock/rockchip,rk3576-cru.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/media/video-interfaces.h>
+#include <dt-bindings/pinctrl/rockchip.h>
+
+&{/} {
+	/* Same nodes as in the CSI-3 overlay; loading both merges them. */
+	vcc_2v8_mipi_csi: regulator-vcc-2v8-mipi-csi {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&gpio0 RK_PC4 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&mipi_csi_pwr_en>;
+		regulator-name = "vcc_2v8_mipi_csi";
+		regulator-min-microvolt = <2800000>;
+		regulator-max-microvolt = <2800000>;
+		vin-supply = <&vcc_5v0_sys>;
+	};
+
+	vcc_1v8_mipi_csi: regulator-vcc-1v8-mipi-csi {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&gpio0 RK_PC4 GPIO_ACTIVE_HIGH>;
+		regulator-name = "vcc_1v8_mipi_csi";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		vin-supply = <&vcc_5v0_sys>;
+	};
+
+	vcc_1v2_mipi_csi: regulator-vcc-1v2-mipi-csi {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&gpio0 RK_PC4 GPIO_ACTIVE_HIGH>;
+		regulator-name = "vcc_1v2_mipi_csi";
+		regulator-min-microvolt = <1200000>;
+		regulator-max-microvolt = <1200000>;
+		vin-supply = <&vcc_5v0_sys>;
+	};
+};
+
+&csi1 {
+	status = "okay";
+};
+
+&csi1_in {
+	csi1_input: endpoint {
+		bus-type = <MEDIA_BUS_TYPE_CSI2_DPHY>;
+		data-lanes = <1 2 3 4>;
+		link-frequencies = /bits/ 64 <445500000>;
+		remote-endpoint = <&imx415_csi1_output>;
+	};
+};
+
+&csi_dphy0 {
+	status = "okay";
+};
+
+&i2c5 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c5m3_xfer>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	imx415_csi1: camera-sensor@37 {
+		compatible = "sony,imx415";
+		reg = <0x37>;
+		assigned-clocks = <&cru CLK_MIPI_CAMERAOUT_M1>;
+		assigned-clock-rates = <37125000>;
+		avdd-supply = <&vcc_2v8_mipi_csi>;
+		clocks = <&cru CLK_MIPI_CAMERAOUT_M1>;
+		dvdd-supply = <&vcc_1v2_mipi_csi>;
+		orientation = <2>; /* External */
+		ovdd-supply = <&vcc_1v8_mipi_csi>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&cam1_rstn &cam_clk1m0_clk1>;
+		reset-gpios = <&gpio1 RK_PC4 GPIO_ACTIVE_LOW>;
+
+		port {
+			imx415_csi1_output: endpoint {
+				data-lanes = <1 2 3 4>;
+				link-frequencies = /bits/ 64 <445500000>;
+				remote-endpoint = <&csi1_input>;
+			};
+		};
+	};
+};
+
+&pinctrl {
+	cam {
+		mipi_csi_pwr_en: mipi-csi-pwr-en {
+			rockchip,pins = <0 RK_PC4 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+
+		cam1_rstn: cam1-rstn {
+			rockchip,pins = <1 RK_PC4 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+};
+
+&vicap {
+	status = "okay";
+};
+
+&vicap_mmu {
+	status = "okay";
+};
