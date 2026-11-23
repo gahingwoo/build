@@ -1,43 +1,45 @@
-From 0b7dfa9891db7deabe7a87aa059a2757117a5eb1 Mon Sep 17 00:00:00 2001
+From e8247385974299623c8fd28db6879c17561f75f3 Mon Sep 17 00:00:00 2001
 From: Jiaxing Hu <gahing@gahingwoo.com>
 Date: Mon, 23 Nov 2026 22:13:52 +1300
-Subject: [PATCH] iommu/rockchip: stop paging on banks that still page when
- enabling
+Subject: [PATCH] iommu/rockchip: Disable paging on banks that still page
+ before a force reset
 
-A reset of the master can leave the banks of one IOMMU in different
-states. On the RK3576 NPU, after a job timeout resets the core, one bank
-is back in reset state while the other keeps paging with the old
-directory. The stall and paging helpers only report a state when every
-bank is in it, so they skip such an IOMMU, the paging bank ignores the
-DTE_ADDR writes of the force reset, and every later enable fails with
-"MMU_DTE_ADDR is not functioning".
+After an RK3576 NPU job timeout resets the core, the banks of its IOMMU
+can be left in different states: bank 0 is still paging while bank 1
+has been reset.
 
-When the banks disagree, stall the banks that still page, stop their
-paging and release the stall, one bank at a time, before the normal
-enable sequence. Also print each bank's status when the DTE_ADDR check
-fails.
+In this state the existing stall and paging helpers do nothing, so the
+force reset that follows fails as well. The IOMMU can then no longer be
+enabled, and the NPU stops working.
 
-TEST ONLY (r429), not sent.
+When the banks disagree, stop paging on the banks that still page
+first, then run the existing sequence.
+
+Tested on a ROCK 4D with repeated forced job timeouts. Without this
+patch, one in every 2 to 10 timeouts was not recovered from; with it,
+20 out of 20 recovered.
+
+Fixes: cd6438c5f844 ("iommu/rockchip: Reconstruct to support multi slaves")
+Signed-off-by: Jiaxing Hu <gahing@gahingwoo.com>
 ---
- drivers/iommu/rockchip-iommu.c | 66 ++++++++++++++++++++++++++++++++++
- 1 file changed, 66 insertions(+)
+Not tested on the RK3588.
+
+LLM-assisted.
+
+ drivers/iommu/rockchip-iommu.c | 61 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 61 insertions(+)
 
 diff --git a/drivers/iommu/rockchip-iommu.c b/drivers/iommu/rockchip-iommu.c
-index 1fa3110b142a..ad688659c601 100644
+index 1fa3110b142a..5eabefb0ad14 100644
 --- a/drivers/iommu/rockchip-iommu.c
 +++ b/drivers/iommu/rockchip-iommu.c
-@@ -507,6 +507,66 @@ static int rk_iommu_disable_paging(struct rk_iommu *iommu)
+@@ -507,6 +507,64 @@ static int rk_iommu_disable_paging(struct rk_iommu *iommu)
  	return ret;
  }
  
 +/*
-+ * A reset of the master can leave the banks of one IOMMU in different
-+ * states: on the RK3576 NPU the core reset puts one bank back to reset
-+ * state while the other keeps paging with the old directory. The
-+ * helpers above treat "paging enabled" and "stall active" as true only
-+ * when every bank agrees, so they skip such an IOMMU, and the paging
-+ * bank then ignores the DTE_ADDR writes of the force reset. Stall and
-+ * stop paging on the banks that still page, one bank at a time.
++ * The helpers above only act when every bank agrees. After a reset of the
++ * master, one bank can still be paging; stop it bank by bank.
 + */
 +static void rk_iommu_quiesce_paging_banks(struct rk_iommu *iommu)
 +{
@@ -50,8 +52,8 @@ index 1fa3110b142a..ad688659c601 100644
 +		if (!(rk_iommu_read(base, RK_MMU_STATUS) & RK_MMU_STATUS_PAGING_ENABLED))
 +			continue;
 +
-+		dev_warn(iommu->dev, "bank %d still paging, status %#08x; disabling it\n",
-+			 i, rk_iommu_read(base, RK_MMU_STATUS));
++		dev_warn_ratelimited(iommu->dev, "bank %d still paging, status %#08x; disabling it\n",
++				     i, rk_iommu_read(base, RK_MMU_STATUS));
 +
 +		if (rk_iommu_read(base, RK_MMU_STATUS) & RK_MMU_STATUS_PAGE_FAULT_ACTIVE)
 +			writel(RK_MMU_CMD_PAGE_FAULT_DONE, base + RK_MMU_COMMAND);
@@ -61,21 +63,24 @@ index 1fa3110b142a..ad688659c601 100644
 +					 status & RK_MMU_STATUS_STALL_ACTIVE,
 +					 RK_MMU_POLL_PERIOD_US, RK_MMU_POLL_TIMEOUT_US);
 +		if (ret)
-+			dev_err(iommu->dev, "bank %d: stall timed out, status %#08x\n", i, status);
++			dev_err(iommu->dev, "bank %d: stall timed out, status %#08x\n",
++				i, status);
 +
 +		rk_iommu_base_command(base, RK_MMU_CMD_DISABLE_PAGING);
 +		ret = readl_poll_timeout(base + RK_MMU_STATUS, status,
 +					 !(status & RK_MMU_STATUS_PAGING_ENABLED),
 +					 RK_MMU_POLL_PERIOD_US, RK_MMU_POLL_TIMEOUT_US);
 +		if (ret)
-+			dev_err(iommu->dev, "bank %d: disable paging timed out, status %#08x\n", i, status);
++			dev_err(iommu->dev, "bank %d: disable paging timed out, status %#08x\n",
++				i, status);
 +
 +		rk_iommu_base_command(base, RK_MMU_CMD_DISABLE_STALL);
 +		ret = readl_poll_timeout(base + RK_MMU_STATUS, status,
 +					 !(status & RK_MMU_STATUS_STALL_ACTIVE),
 +					 RK_MMU_POLL_PERIOD_US, RK_MMU_POLL_TIMEOUT_US);
 +		if (ret)
-+			dev_err(iommu->dev, "bank %d: disable stall timed out, status %#08x\n", i, status);
++			dev_err(iommu->dev, "bank %d: disable stall timed out, status %#08x\n",
++				i, status);
 +	}
 +}
 +
@@ -93,17 +98,7 @@ index 1fa3110b142a..ad688659c601 100644
  static int rk_iommu_force_reset(struct rk_iommu *iommu)
  {
  	int ret, i;
-@@ -525,6 +585,9 @@ static int rk_iommu_force_reset(struct rk_iommu *iommu)
- 		rk_iommu_write(iommu->bases[i], RK_MMU_DTE_ADDR, dte_addr);
- 
- 		if (dte_addr != rk_iommu_read(iommu->bases[i], RK_MMU_DTE_ADDR)) {
-+			dev_err_ratelimited(iommu->dev, "bank %d status %#08x DTE_ADDR %#08x\n", i,
-+					    rk_iommu_read(iommu->bases[i], RK_MMU_STATUS),
-+					    rk_iommu_read(iommu->bases[i], RK_MMU_DTE_ADDR));
- 			dev_err(iommu->dev, "Error during raw reset. MMU_DTE_ADDR is not functioning\n");
- 			return -EFAULT;
- 		}
-@@ -947,6 +1010,9 @@ static int rk_iommu_enable(struct rk_iommu *iommu)
+@@ -947,6 +1005,9 @@ static int rk_iommu_enable(struct rk_iommu *iommu)
  	if (ret)
  		return ret;
  
@@ -113,6 +108,8 @@ index 1fa3110b142a..ad688659c601 100644
  	ret = rk_iommu_enable_stall(iommu);
  	if (ret)
  		goto out_disable_clocks;
+
+base-commit: 909ef7a9a30fa139e69e555e3606680f5cca7726
 -- 
 2.43.0
 
