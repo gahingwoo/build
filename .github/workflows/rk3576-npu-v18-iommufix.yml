@@ -1,8 +1,8 @@
-name: RK3576 NPU v18 draft test (test only)
+name: RK3576 NPU v18 + iommu bank fix (test only)
 
 on:
   push:
-    branches: [rk3576-npu-v18-test]
+    branches: [rk3576-npu-v18-iommufix]
   workflow_dispatch:
 
 jobs:
